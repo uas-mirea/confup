@@ -12,6 +12,8 @@ public class CommandMap {
         commands.put(TestCommand.NAME, new TestCommand());
         commands.put(Cd.NAME, new Cd());
         commands.put(Ls.NAME, new Ls());
+        commands.put(Date.NAME, new Date());
+        commands.put(Cal.NAME, new Cal());
         commands.put(Rm.NAME, new Rm());
         commands.put(RmDir.NAME, new RmDir());
         commands.put(Touch.NAME, new Touch());
