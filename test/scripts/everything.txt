@@ -1,0 +1,26 @@
+help
+test 1 2\ 3 "4 5 6" 7
+date
+cal
+touch created_from_noted.txt
+
+noted created_from_noted.txt
+writeln
+This is a line
+write
+And this isn't
+writeln
+ a line
+save
+done
+
+cat created_from_noted.txt
+cp created_from_noted.txt copied.txt
+
+ls
+ls b
+cd b/deeper/even_deeper/the_deepest
+cd /
+
+rm created_from_noted.txt
+rmdir b
