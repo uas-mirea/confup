@@ -1,0 +1,10 @@
+ls
+cd b
+ls
+cd deeper/even_deeper/the_deepest
+cat happy.txt
+cat sad.txt
+cd ..
+cat 001.txt
+cd ./../.
+cat ./deep_file.txt
