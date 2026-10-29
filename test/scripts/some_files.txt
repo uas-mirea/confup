@@ -1,0 +1,4 @@
+ls
+cat a.txt
+cat b.txt
+cat c.txt
