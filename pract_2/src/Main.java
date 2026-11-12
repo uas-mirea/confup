@@ -6,6 +6,10 @@ import nuget.NugetClient;
 import nuget.Package;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.Stack;
 
 public class Main {
 
@@ -91,5 +95,36 @@ public class Main {
             return;
         }
         dependencyTree.prettyPrint();
+
+        System.out.println("Simulating install");
+        Set<String> downloaded = new HashSet<>();
+
+        Stack<DependencyTree.Leaf> leafStack = new Stack<>();
+        Set<String> processing = new HashSet<>();
+        leafStack.push(dependencyTree.getRoot());
+        processing.add(dependencyTree.getRoot().pkg.id);
+
+        while (!leafStack.isEmpty()) {
+            DependencyTree.Leaf current = leafStack.peek();
+
+            boolean allDownloaded = current.dependencies.stream()
+                    .allMatch(dep -> downloaded.contains(dep.pkg.id));
+
+            if (allDownloaded) {
+                System.out.printf("Pseudo-installing \"%s\"\n", current.pkg.id);
+                downloaded.add(current.pkg.id);
+                processing.remove(current.pkg.id);
+                leafStack.pop();
+            } else {
+                for (DependencyTree.Leaf dependency : current.dependencies) {
+                    if (!downloaded.contains(dependency.pkg.id) &&
+                            !processing.contains(dependency.pkg.id)) {
+                        leafStack.push(dependency);
+                        processing.add(dependency.pkg.id);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
