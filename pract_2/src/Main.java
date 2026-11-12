@@ -1,11 +1,11 @@
 import argparse.ArgParser;
+import deptree.DependencyTree;
+import deptree.FakeNuget;
 import nuget.Downloader;
 import nuget.NugetClient;
 import nuget.Package;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 public class Main {
 
@@ -15,6 +15,9 @@ public class Main {
         argParser.addArg("package-name", ArgParser.ParseMode.STRING);
         argParser.addArg("package-url", ArgParser.ParseMode.STRING);
         argParser.addArg("package-file", ArgParser.ParseMode.STRING);
+        argParser.addArgWithDefault("dotnet-version", "net10.0");
+        argParser.addArgWithDefault("depth", 5);
+        argParser.addArg("fake-nuget", ArgParser.ParseMode.STRING);
 
         try {
             argParser.parse(args);
@@ -27,6 +30,8 @@ public class Main {
         String packageName = argParser.getStringArg("package-name");
         String packageUrl = argParser.getStringArg("package-url");
         String packageFile = argParser.getStringArg("package-file");
+        String dotnetVersion = argParser.getStringArg("dotnet-version");
+        int depth = argParser.getIntegerArg("depth");
 
         int counter = (packageName != null ? 1 : 0)
                 + (packageUrl != null ? 1 : 0)
@@ -38,15 +43,31 @@ public class Main {
             return;
         }
 
+        String fakeNugetPath = argParser.getStringArg("fake-nuget");
+        if (fakeNugetPath != null) {
+            if (packageName == null) {
+                System.out.println(
+                        "Only \"package-name\" is supported with fake NuGet");
+            }
+
+            FakeNuget fake = new FakeNuget(fakeNugetPath);
+            Package fakePkg = fake.getPackage(packageName);
+            DependencyTree dependencyTree = DependencyTree.buildFromRoot(
+                    fakePkg, depth, "any", fake);
+            dependencyTree.prettyPrint();
+
+            return;
+        }
+
         Package pkg;
 
         if (packageName != null || packageUrl != null) {
             try {
                 if (packageName != null) {
-                    System.out.println("Downloading from NuGet Gallery");
+                    System.out.println("Downloading root from NuGet Gallery");
                     pkg = NugetClient.downloadByName(packageName);
                 } else {
-                    System.out.println("Downloading from provided URL");
+                    System.out.println("Downloading root from provided URL");
                     pkg = NugetClient.downloadByUrl(packageUrl);
                 }
             } catch (Downloader.DownloaderException |
@@ -55,25 +76,20 @@ public class Main {
                 System.out.println(e.getMessage());
                 return;
             }
-            System.out.println("Download finished");
         } else {
             pkg = NugetClient.loadByPath(packageFile);
         }
 
-        System.out.printf("id: %s\n", pkg.id);
-        System.out.printf("version: %s\n", pkg.version);
-        System.out.printf("title: %s\n", pkg.title);
-        System.out.printf("authors: %s\n", pkg.authors);
-        System.out.printf("description: %s\n\n", pkg.description);
-
-        for (Map.Entry<String, List<Package.Dependency>> entry :
-                pkg.dependencies.entrySet()) {
-            System.out.printf("dependencies for %s:\n", entry.getKey());
-            for (Package.Dependency dep : entry.getValue()) {
-                System.out.printf("* %s, version: %s\n",
-                        dep.id(), dep.version());
-            }
-            System.out.print('\n');
+        System.out.println("Getting info about dependencies...");
+        DependencyTree dependencyTree;
+        try {
+            dependencyTree = DependencyTree.buildFromRoot(
+                    pkg, depth, dotnetVersion);
+        } catch (Downloader.DownloaderException e) {
+            System.out.println("Error during download!");
+            System.out.println(e.getMessage());
+            return;
         }
+        dependencyTree.prettyPrint();
     }
 }

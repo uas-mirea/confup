@@ -265,4 +265,22 @@ public class Package {
                     "Missing required metadata \"" + field + "\"");
         }
     }
+
+    public static Package createFake(
+            String id, List<Dependency> dependencies) {
+        Map<String, List<Dependency>> dependencyMap = new HashMap<>();
+        dependencyMap.put("any",
+                Collections.unmodifiableList(new ArrayList<>(dependencies))
+        );
+
+        return new Package(
+                id,
+                "0.0.0+fake",
+                id,
+                "uas-mirea",
+                "I AM NOT REAL I AM NOT REAL AAAA",
+                dependencyMap
+        );
+    }
+
 }
