@@ -1,15 +1,12 @@
 import argparse.ArgParser;
 import deptree.DependencyTree;
+import deptree.DiagramBuilder;
 import deptree.FakeNuget;
 import nuget.Downloader;
 import nuget.NugetClient;
 import nuget.Package;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Stack;
 
 public class Main {
 
@@ -22,6 +19,8 @@ public class Main {
         argParser.addArgWithDefault("dotnet-version", "net10.0");
         argParser.addArgWithDefault("depth", 5);
         argParser.addArg("fake-nuget", ArgParser.ParseMode.STRING);
+        argParser.addArgWithDefault("print-tree", false);
+        argParser.addArgWithDefault("build-diagram", true);
 
         try {
             argParser.parse(args);
@@ -36,6 +35,8 @@ public class Main {
         String packageFile = argParser.getStringArg("package-file");
         String dotnetVersion = argParser.getStringArg("dotnet-version");
         int depth = argParser.getIntegerArg("depth");
+        boolean printTree = argParser.getBooleanArg("print-tree");
+        boolean buildDiagram = argParser.getBooleanArg("build-diagram");
 
         int counter = (packageName != null ? 1 : 0)
                 + (packageUrl != null ? 1 : 0)
@@ -58,7 +59,14 @@ public class Main {
             Package fakePkg = fake.getPackage(packageName);
             DependencyTree dependencyTree = DependencyTree.buildFromRoot(
                     fakePkg, depth, "any", fake);
-            dependencyTree.prettyPrint();
+            if (printTree) {
+                dependencyTree.prettyPrint();
+            }
+
+            if (buildDiagram) {
+                DiagramBuilder diagramBuilder = new DiagramBuilder();
+                System.out.println(diagramBuilder.buildDiagram(dependencyTree));
+            }
 
             return;
         }
@@ -94,37 +102,13 @@ public class Main {
             System.out.println(e.getMessage());
             return;
         }
-        dependencyTree.prettyPrint();
+        if (printTree) {
+            dependencyTree.prettyPrint();
+        }
 
-        System.out.println("Simulating install");
-        Set<String> downloaded = new HashSet<>();
-
-        Stack<DependencyTree.Leaf> leafStack = new Stack<>();
-        Set<String> processing = new HashSet<>();
-        leafStack.push(dependencyTree.getRoot());
-        processing.add(dependencyTree.getRoot().pkg.id);
-
-        while (!leafStack.isEmpty()) {
-            DependencyTree.Leaf current = leafStack.peek();
-
-            boolean allDownloaded = current.dependencies.stream()
-                    .allMatch(dep -> downloaded.contains(dep.pkg.id));
-
-            if (allDownloaded) {
-                System.out.printf("Pseudo-installing \"%s\"\n", current.pkg.id);
-                downloaded.add(current.pkg.id);
-                processing.remove(current.pkg.id);
-                leafStack.pop();
-            } else {
-                for (DependencyTree.Leaf dependency : current.dependencies) {
-                    if (!downloaded.contains(dependency.pkg.id) &&
-                            !processing.contains(dependency.pkg.id)) {
-                        leafStack.push(dependency);
-                        processing.add(dependency.pkg.id);
-                        break;
-                    }
-                }
-            }
+        if(buildDiagram) {
+            DiagramBuilder diagramBuilder = new DiagramBuilder();
+            System.out.println(diagramBuilder.buildDiagram(dependencyTree));
         }
     }
 }
