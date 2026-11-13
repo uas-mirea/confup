@@ -54,145 +54,65 @@ public class Package {
     }
 
     public static Package fromZipFile(ZipFile zipFile) {
-        Enumeration<? extends ZipEntry> entries = zipFile.entries();
-        if (!entries.hasMoreElements()) {
-            throw new PackageException("Invalid package");
-        }
+        ZipEntry specEntry = findSpecEntry(zipFile);
 
-        ZipEntry specEntry = null;
+        try (InputStream inputStream = zipFile.getInputStream(specEntry)) {
+            XMLStreamReader reader = createXmlReader(inputStream);
 
-        ZipEntry entry = entries.nextElement();
-        while (entry != null) {
-            if (entry.getName().endsWith(".nuspec")) {
-                if (entry.isDirectory()) {
-                    break;
-                }
-                specEntry = entry;
-                break;
+            try {
+                return parseSpec(reader);
+            } finally {
+                reader.close();
             }
-
-            if (!entries.hasMoreElements()) {
-                break;
-            }
-            entry = entries.nextElement();
-        }
-
-        if (specEntry == null) {
-            throw new PackageException("Invalid package");
-        }
-
-        try {
-            InputStream inputStream = zipFile.getInputStream(specEntry);
-
-            XMLInputFactory factory = XMLInputFactory.newInstance();
-
-            factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-            factory.setProperty(
-                    "javax.xml.stream.isSupportingExternalEntities",
-                    false
-            );
-            factory.setXMLResolver((publicID, systemID, baseURI, namespace) -> {
-                throw new XMLStreamException(
-                        "External XML entities are forbidden");
-            });
-
-            XMLStreamReader reader = factory.createXMLStreamReader(inputStream);
-
-            Package pk = parseSpec(reader);
-            reader.close();
-
-            return pk;
         } catch (IOException | XMLStreamException e) {
             throw new PackageException(e);
         }
     }
 
+    private static ZipEntry findSpecEntry(ZipFile zipFile) {
+        Enumeration<? extends ZipEntry> entries = zipFile.entries();
+
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+
+            if (entry.getName().endsWith(".nuspec")
+                    && !entry.isDirectory()) {
+                return entry;
+            }
+        }
+
+        throw new PackageException("Invalid package");
+    }
+
+    private static XMLStreamReader createXmlReader(InputStream inputStream)
+            throws XMLStreamException {
+        XMLInputFactory factory = XMLInputFactory.newInstance();
+
+        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        factory.setProperty(
+                "javax.xml.stream.isSupportingExternalEntities",
+                false
+        );
+
+        factory.setXMLResolver((publicID, systemID, baseURI, namespace) -> {
+            throw new XMLStreamException(
+                    "External XML entities are forbidden"
+            );
+        });
+
+        return factory.createXMLStreamReader(inputStream);
+    }
+
     private static Package parseSpec(XMLStreamReader reader)
             throws XMLStreamException {
+        validatePackageStructure(reader);
 
         Map<String, String> metadata = new HashMap<>();
         Map<String, List<Dependency>> dependencies = new HashMap<>();
 
-        boolean foundPackage = false;
-        boolean foundMetadata = false;
+        parseMetadata(reader, metadata, dependencies);
 
-        while (reader.hasNext()) {
-            int event = reader.next();
-
-            if (event != XMLStreamReader.START_ELEMENT) {
-                continue;
-            }
-
-            if (reader.getLocalName().equals("package")) {
-                foundPackage = true;
-            } else if (reader.getLocalName().equals("metadata")) {
-                if (!foundPackage) {
-                    throw new PackageException("Invalid nuspec structure");
-                }
-
-                foundMetadata = true;
-                break;
-            } else {
-                throw new PackageException("Invalid nuspec structure");
-            }
-        }
-
-        if (!foundPackage || !foundMetadata) {
-            throw new PackageException("Missing package metadata");
-        }
-
-        while (reader.hasNext()) {
-            int event = reader.next();
-
-            if (event == XMLStreamReader.END_ELEMENT
-                    && reader.getLocalName().equals("metadata")) {
-                break;
-            }
-
-            if (event != XMLStreamReader.START_ELEMENT) {
-                continue;
-            }
-
-            String element = reader.getLocalName();
-
-            switch (element) {
-                case "id":
-                case "version":
-                case "title":
-                case "authors":
-                case "description":
-                    metadata.put(element, reader.getElementText().trim());
-                    break;
-
-                case "dependencies":
-                    parseDependencies(reader, dependencies);
-                    break;
-
-                default:
-                    // Ignore all other metadata.
-                    break;
-            }
-        }
-
-        require(metadata, "id");
-        require(metadata, "version");
-        require(metadata, "authors");
-        require(metadata, "description");
-
-        Map<String, List<Dependency>> immutableDependencies = new HashMap<>();
-
-        dependencies.forEach((framework, list) ->
-                immutableDependencies.put(
-                        framework,
-                        Collections.unmodifiableList(new ArrayList<>(list))
-                )
-        );
-
-        metadata.get("id");
-        metadata.get("version");
-        metadata.get("title");
-        metadata.get("authors");
-        metadata.get("description");
+        validateMetadata(metadata);
 
         return new Package(
                 metadata.get("id"),
@@ -200,22 +120,96 @@ public class Package {
                 metadata.get("title"),
                 metadata.get("authors"),
                 metadata.get("description"),
-                Collections.unmodifiableMap(immutableDependencies)
+                makeDependenciesImmutable(dependencies)
         );
+    }
+
+    private static void validatePackageStructure(XMLStreamReader reader)
+            throws XMLStreamException {
+        boolean foundPackage = false;
+
+        while (reader.hasNext()) {
+            if (reader.next() != XMLStreamReader.START_ELEMENT) {
+                continue;
+            }
+
+            String element = reader.getLocalName();
+
+            if (element.equals("package") && !foundPackage) {
+                foundPackage = true;
+                continue;
+            }
+
+            if (element.equals("metadata") && foundPackage) {
+                return;
+            }
+
+            throw new PackageException("Invalid nuspec structure");
+        }
+
+        throw new PackageException("Missing package metadata");
+    }
+
+    private static void parseMetadata(
+            XMLStreamReader reader,
+            Map<String, String> metadata,
+            Map<String, List<Dependency>> dependencies
+    ) throws XMLStreamException {
+        while (reader.hasNext()) {
+            if (reader.next() == XMLStreamReader.END_ELEMENT
+                    && reader.getLocalName().equals("metadata")) {
+                return;
+            }
+
+            if (reader.getEventType() != XMLStreamReader.START_ELEMENT) {
+                continue;
+            }
+
+            String element = reader.getLocalName();
+
+            if (isMetadataField(element)) {
+                metadata.put(element, reader.getElementText().trim());
+            } else if (element.equals("dependencies")) {
+                parseDependencies(reader, dependencies);
+            }
+        }
+    }
+
+    private static boolean isMetadataField(String element) {
+        return switch (element) {
+            case "id", "version", "title", "authors", "description" -> true;
+            default -> false;
+        };
+    }
+
+    private static void validateMetadata(Map<String, String> metadata) {
+        require(metadata, "id");
+        require(metadata, "version");
+        require(metadata, "authors");
+        require(metadata, "description");
+    }
+
+    private static Map<String, List<Dependency>> makeDependenciesImmutable(
+            Map<String, List<Dependency>> dependencies) {
+        Map<String, List<Dependency>> result = new HashMap<>();
+
+        dependencies.forEach((framework, list) -> result.put(framework,
+                Collections.unmodifiableList(new ArrayList<>(list))
+        ));
+
+        return Collections.unmodifiableMap(result);
     }
 
     private static void parseDependencies(
             XMLStreamReader reader,
             Map<String, List<Dependency>> dependencies
     ) throws XMLStreamException {
-
         String framework = "any";
 
         while (reader.hasNext()) {
             int event = reader.next();
 
-            if (event == XMLStreamReader.END_ELEMENT
-                    && reader.getLocalName().equals("dependencies")) {
+            if (isDependenciesEnd(reader, event)) {
                 return;
             }
 
@@ -223,35 +217,64 @@ public class Package {
                 continue;
             }
 
-            String element = reader.getLocalName();
-
-            if (element.equals("group")) {
-                String targetFramework = reader.getAttributeValue(
-                        null, "targetFramework"
-                );
-
-                framework = targetFramework == null || targetFramework.isBlank()
-                        ? "any"
-                        : targetFramework;
-
-            } else if (element.equals("dependency")) {
-                String id = reader.getAttributeValue(null, "id");
-                String version = reader.getAttributeValue(null, "version");
-
-                if (id == null || id.isBlank()) {
-                    throw new PackageException("Dependency is missing its id");
-                }
-
-                dependencies.computeIfAbsent(
-                        framework,
-                        ignored -> new ArrayList<>()
-                ).add(new Dependency(id, version));
-
-                reader.nextTag();
-            }
+            framework = processDependencyElement(
+                    reader,
+                    dependencies,
+                    framework
+            );
         }
 
         throw new PackageException("Unclosed dependencies element");
+    }
+
+    private static boolean isDependenciesEnd(
+            XMLStreamReader reader,
+            int event
+    ) {
+        return event == XMLStreamReader.END_ELEMENT
+                && reader.getLocalName().equals("dependencies");
+    }
+
+    private static String processDependencyElement(
+            XMLStreamReader reader,
+            Map<String, List<Dependency>> dependencies,
+            String framework
+    ) throws XMLStreamException {
+        return switch (reader.getLocalName()) {
+            case "group" -> getFramework(reader);
+            case "dependency" -> {
+                addDependency(reader, dependencies, framework);
+                yield framework;
+            }
+            default -> framework;
+        };
+    }
+
+    private static String getFramework(XMLStreamReader reader) {
+        String framework = reader.getAttributeValue(null, "targetFramework");
+        return framework == null || framework.isBlank()
+                ? "any"
+                : framework;
+    }
+
+    private static void addDependency(
+            XMLStreamReader reader,
+            Map<String, List<Dependency>> dependencies,
+            String framework
+    ) throws XMLStreamException {
+        String id = reader.getAttributeValue(null, "id");
+        String version = reader.getAttributeValue(null, "version");
+
+        if (id == null || id.isBlank()) {
+            throw new PackageException("Dependency is missing its id");
+        }
+
+        dependencies.computeIfAbsent(
+                framework,
+                ignored -> new ArrayList<>()
+        ).add(new Dependency(id, version));
+
+        reader.nextTag();
     }
 
     private static void require(

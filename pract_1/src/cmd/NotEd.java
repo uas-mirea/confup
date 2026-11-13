@@ -8,14 +8,15 @@ import java.util.Scanner;
 public final class NotEd implements Command {
     public static final String NAME = "noted";
 
+    private static final int REQUIRED_SPAGHETTI = 2;
+
     public String getArgTemplate() {
         return "<file>";
     }
 
     public int run(String[] args, State state) {
         PrintStream stdout = state.getStdout();
-
-        if (args.length < 2) {
+        if (args.length < REQUIRED_SPAGHETTI) {
             stdout.println("Please provide a file");
             return 1;
         }
@@ -36,6 +37,11 @@ public final class NotEd implements Command {
         Scanner sc = state.getStdinScanner();
         StringBuilder wbuf = new StringBuilder();
 
+        return editorLoop(stdout, sc, wbuf, file);
+    }
+
+    private int editorLoop(PrintStream stdout,
+        Scanner sc, StringBuilder wbuf, VirtualFs.File file) {
         for (;;) {
             stdout.print("> ");
             String editorCommand = sc.nextLine().strip();

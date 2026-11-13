@@ -5,107 +5,105 @@ public final class ArgParser {
         NORMAL, ESCAPED, QUOTED, SKIPPING
     }
 
-    public static String[] parseArgs(String command) {
-        ArrayList<String> parsedArgs = new ArrayList<String>();
+    private static class ParseState {
+        ArrayList<String> parsedArgs = new ArrayList<>();
         StringBuilder currentArg = new StringBuilder();
         ParseMode parseMode = ParseMode.SKIPPING;
         ParseMode retParseMode = ParseMode.NORMAL;
+    }
 
-        for (int i = 0; i < command.length(); ) {
-            char c = command.charAt(i);
+    public static String[] parseArgs(String command) {
+        ParseState state = new ParseState();
 
-            switch (parseMode) {
-                case NORMAL:
-                    switch (c) {
-                        case ' ':
-                            parsedArgs.add(currentArg.toString());
-                            currentArg = new StringBuilder();
-                            parseMode = ParseMode.SKIPPING;
-                            break;
-
-                        case '\\':
-                            retParseMode = parseMode;
-                            parseMode = ParseMode.ESCAPED;
-                            i++;
-                            continue;
-
-                        default:
-                            currentArg.append(c);
-                            i++;
-                            continue;
-                    }
-                    continue;
-
-                case ESCAPED:
-                    switch (c) {
-                        case '\\':
-                            currentArg.append('\\');
-                            break;
-                        case 'n':
-                            currentArg.append('\n');
-                            break;
-                        case 't':
-                            currentArg.append('\t');
-                            break;
-                        case '"':
-                            currentArg.append('"');
-                            break;
-                        case '\'':
-                            currentArg.append('\'');
-                            break;
-                        case ' ':
-                            currentArg.append(' ');
-                            break;
-                        case '\n':
-                            break;
-                        default:
-                            break;
-                    }
-                    parseMode = retParseMode;
-                    i++;
-                    continue;
-
-                case QUOTED:
-                    switch (c) {
-                        case '\\':
-                            retParseMode = parseMode;
-                            parseMode = ParseMode.ESCAPED;
-                            i++;
-                            continue;
-
-                        case '"':
-                            parseMode = ParseMode.SKIPPING;
-                            i++;
-                            break;
-
-                        default:
-                            currentArg.append(c);
-                            i++;
-                            continue;
-                    }
-                    break;
-
-                case SKIPPING:
-                    if (c == ' ') {
-                        i++;
-                    } else if (c == '"') {
-                        parseMode = ParseMode.QUOTED;
-                        i++;
-                    } else {
-                        parseMode = ParseMode.NORMAL;
-                    }
-                    continue;
-            }
-
-            parsedArgs.add(currentArg.toString());
-            currentArg = new StringBuilder();
+        for (int i = 0; i < command.length();) {
+            i = switch (state.parseMode) {
+                case NORMAL -> parseNormal(command, i, state);
+                case ESCAPED -> parseEscaped(command, i, state);
+                case QUOTED -> parseQuoted(command, i, state);
+                case SKIPPING -> parseSkipping(command, i, state);
+            };
         }
 
-        if (currentArg.length() != 0) {
-            parsedArgs.add(currentArg.toString());
+        if (!state.currentArg.isEmpty()) {
+            state.parsedArgs.add(state.currentArg.toString());
         }
 
-        String[] arr = parsedArgs.toArray(new String[parsedArgs.size()]);
-        return arr;
+        return state.parsedArgs.toArray(new String[0]);
+    }
+
+    private static int parseNormal(String command, int i, ParseState state) {
+        char c = command.charAt(i);
+
+        if (c == ' ') {
+            state.parsedArgs.add(state.currentArg.toString());
+            state.currentArg = new StringBuilder();
+            state.parseMode = ParseMode.SKIPPING;
+            return i;
+        }
+
+        if (c == '\\') {
+            state.retParseMode = ParseMode.NORMAL;
+            state.parseMode = ParseMode.ESCAPED;
+            return i + 1;
+        }
+
+        state.currentArg.append(c);
+        return i + 1;
+    }
+
+    private static int parseEscaped(String command, int i, ParseState state) {
+        char c = command.charAt(i);
+
+        switch (c) {
+            case '\\': state.currentArg.append('\\'); break;
+            case 'n':  state.currentArg.append('\n'); break;
+            case 't':  state.currentArg.append('\t'); break;
+            case '"':  state.currentArg.append('"'); break;
+            case '\'': state.currentArg.append('\''); break;
+            case ' ':  state.currentArg.append(' '); break;
+        }
+
+        state.parseMode = state.retParseMode;
+        return i + 1;
+    }
+
+    private static int parseQuoted(String command, int i, ParseState state) {
+        char c = command.charAt(i);
+
+        if (c == '\\') {
+            state.retParseMode = ParseMode.QUOTED;
+            state.parseMode = ParseMode.ESCAPED;
+            return i + 1;
+        }
+
+        if (c == '"') {
+            state.parseMode = ParseMode.SKIPPING;
+            finishArg(state);
+            return i + 1;
+        }
+
+        state.currentArg.append(c);
+        return i + 1;
+    }
+
+    private static int parseSkipping(String command, int i, ParseState state) {
+        char c = command.charAt(i);
+
+        if (c == ' ') {
+            return i + 1;
+        }
+
+        if (c == '"') {
+            state.parseMode = ParseMode.QUOTED;
+            return i + 1;
+        }
+
+        state.parseMode = ParseMode.NORMAL;
+        return i;
+    }
+
+    private static void finishArg(ParseState state) {
+        state.parsedArgs.add(state.currentArg.toString());
+        state.currentArg = new StringBuilder();
     }
 }

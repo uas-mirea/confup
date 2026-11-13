@@ -10,7 +10,41 @@ import java.io.IOException;
 
 public class Main {
 
+    private record Args(
+            String packageName,
+            String packageUrl,
+            String packageFile,
+            String dotnetVersion,
+            int depth,
+            boolean printTree,
+            boolean buildDiagram,
+            String fakeNugetPath
+    ) {
+    }
+
     public static void main(String[] args) throws IOException {
+        Args parsedArgs = parseArgs(args);
+        if (parsedArgs == null) {
+            return;
+        }
+        int counter = (parsedArgs.packageName != null ? 1 : 0)
+                + (parsedArgs.packageUrl != null ? 1 : 0)
+                + (parsedArgs.packageFile != null ? 1 : 0);
+        if (counter != 1) {
+            System.out.println(
+                    "Must specify only package name, URL or file");
+            return;
+        }
+
+        if (parsedArgs.fakeNugetPath != null) {
+            runFakeNuget(parsedArgs);
+            return;
+        }
+
+        runRealNuget(parsedArgs);
+    }
+
+    private static Args parseArgs(String[] args) {
         ArgParser argParser = new ArgParser();
 
         argParser.addArg("package-name", ArgParser.ParseMode.STRING);
@@ -27,60 +61,53 @@ public class Main {
         } catch (ArgParser.ArgParseException e) {
             System.out.println("Failure parsing args!");
             System.out.println(e.getMessage());
-            return;
+            return null;
         }
 
-        String packageName = argParser.getStringArg("package-name");
-        String packageUrl = argParser.getStringArg("package-url");
-        String packageFile = argParser.getStringArg("package-file");
-        String dotnetVersion = argParser.getStringArg("dotnet-version");
-        int depth = argParser.getIntegerArg("depth");
-        boolean printTree = argParser.getBooleanArg("print-tree");
-        boolean buildDiagram = argParser.getBooleanArg("build-diagram");
+        return new Args(
+                argParser.getStringArg("package-name"),
+                argParser.getStringArg("package-url"),
+                argParser.getStringArg("package-file"),
+                argParser.getStringArg("dotnet-version"),
+                argParser.getIntegerArg("depth"),
+                argParser.getBooleanArg("print-tree"),
+                argParser.getBooleanArg("build-diagram"),
+                argParser.getStringArg("fake-nuget")
+        );
+    }
 
-        int counter = (packageName != null ? 1 : 0)
-                + (packageUrl != null ? 1 : 0)
-                + (packageFile != null ? 1 : 0);
-
-        if (counter != 1) {
+    private static void runFakeNuget(Args parsedArgs) {
+        if (parsedArgs.packageName == null) {
             System.out.println(
-                    "Must specify only package name, URL or file");
+                    "Only \"package-name\" is supported with fake NuGet");
             return;
         }
 
-        String fakeNugetPath = argParser.getStringArg("fake-nuget");
-        if (fakeNugetPath != null) {
-            if (packageName == null) {
-                System.out.println(
-                        "Only \"package-name\" is supported with fake NuGet");
-            }
-
-            FakeNuget fake = new FakeNuget(fakeNugetPath);
-            Package fakePkg = fake.getPackage(packageName);
-            DependencyTree dependencyTree = DependencyTree.buildFromRoot(
-                    fakePkg, depth, "any", fake);
-            if (printTree) {
-                dependencyTree.prettyPrint();
-            }
-
-            if (buildDiagram) {
-                DiagramBuilder diagramBuilder = new DiagramBuilder();
-                System.out.println(diagramBuilder.buildDiagram(dependencyTree));
-            }
-
-            return;
+        FakeNuget fake = new FakeNuget(parsedArgs.fakeNugetPath);
+        Package fakePkg = fake.getPackage(parsedArgs.packageName);
+        DependencyTree dependencyTree = DependencyTree.buildFromRoot(
+                fakePkg, parsedArgs.depth, "any", fake);
+        if (parsedArgs.printTree) {
+            dependencyTree.prettyPrint();
         }
 
+        if (parsedArgs.buildDiagram) {
+            DiagramBuilder diagramBuilder = new DiagramBuilder();
+            System.out.println(diagramBuilder.buildDiagram(dependencyTree));
+        }
+    }
+
+    private static void runRealNuget(Args parsedArgs) {
         Package pkg;
-
-        if (packageName != null || packageUrl != null) {
+        if (parsedArgs.packageName != null ||
+                parsedArgs.packageUrl != null) {
             try {
-                if (packageName != null) {
+                if (parsedArgs.packageName != null) {
                     System.out.println("Downloading root from NuGet Gallery");
-                    pkg = NugetClient.downloadByName(packageName);
+                    pkg = NugetClient.downloadByName(parsedArgs.packageName);
                 } else {
                     System.out.println("Downloading root from provided URL");
-                    pkg = NugetClient.downloadByUrl(packageUrl);
+                    pkg = NugetClient.downloadByUrl(parsedArgs.packageUrl);
                 }
             } catch (Downloader.DownloaderException |
                      Package.PackageException e) {
@@ -89,24 +116,22 @@ public class Main {
                 return;
             }
         } else {
-            pkg = NugetClient.loadByPath(packageFile);
+            pkg = NugetClient.loadByPath(parsedArgs.packageFile);
         }
-
         System.out.println("Getting info about dependencies...");
         DependencyTree dependencyTree;
         try {
             dependencyTree = DependencyTree.buildFromRoot(
-                    pkg, depth, dotnetVersion);
+                    pkg, parsedArgs.depth, parsedArgs.dotnetVersion);
         } catch (Downloader.DownloaderException e) {
             System.out.println("Error during download!");
             System.out.println(e.getMessage());
             return;
         }
-        if (printTree) {
+        if (parsedArgs.printTree) {
             dependencyTree.prettyPrint();
         }
-
-        if(buildDiagram) {
+        if (parsedArgs.buildDiagram) {
             DiagramBuilder diagramBuilder = new DiagramBuilder();
             System.out.println(diagramBuilder.buildDiagram(dependencyTree));
         }

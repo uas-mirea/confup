@@ -30,75 +30,26 @@ public class ArgParser {
         PARSING_BOOLEAN_ARG
     }
 
+
     private final HashMap<String, ParseMode> argNames = new HashMap<>();
     private final HashMap<String, Object> defaultArgs = new HashMap<>();
     private final HashMap<String, Object> args = new HashMap<>();
 
-    public void parse(String[] argsArray) {
-        // Welcome to the state machine spaghetti zone.
-        // Enjoy your stay 🍝
+    private ParserState state = ParserState.SEARCHING_FOR_ARG;
+    private int current = 0;
+    private String argName = null;
+    private String[] argsArray = null;
 
-        ParserState state = ParserState.SEARCHING_FOR_ARG;
-        int current = 0;
-        String argName = null;
+    public void parse(String[] argsArray) {
+        state = ParserState.SEARCHING_FOR_ARG;
+        current = 0;
+        argName = null;
+        this.argsArray = argsArray;
 
         while (current < argsArray.length) {
-            switch (state) {
-                case SEARCHING_FOR_ARG:
-                    String part = argsArray[current];
-                    if (!part.startsWith("-")) {
-                        throw new ArgParseException(
-                                "Unexpected word \"" + part + "\"");
-                    }
-
-                    int equalsIndex = part.indexOf('=');
-                    String argValue = null;
-                    if (equalsIndex == -1) {
-                        argName = part.substring(1);
-                    } else {
-                        argName = part.substring(1, equalsIndex);
-                        argValue = part.substring(equalsIndex + 1);
-                    }
-
-                    if (!argNames.containsKey(argName)) {
-                        throw new ArgParseException(
-                                "Unknown argument \"" + argName + "\"");
-                    }
-
-                    if (argValue != null) {
-                        args.put(argName, parseCorrectly(argName, argValue));
-                    } else {
-                        state = ParserState.PARSING_ARG;
-                        if (argNames.get(argName) == ParseMode.BOOLEAN) {
-                            state = ParserState.PARSING_BOOLEAN_ARG;
-                        }
-                    }
-                    current++;
-
-                    break;
-
-                case PARSING_ARG:
-                    args.put(argName,
-                            parseCorrectly(argName, argsArray[current]));
-                    current++;
-                    state = ParserState.SEARCHING_FOR_ARG;
-                    break;
-
-                case PARSING_BOOLEAN_ARG:
-                    String currentPart = argsArray[current];
-                    if (currentPart.startsWith("-")) {
-                        args.put(argName, true);
-                    } else {
-                        args.put(argName,
-                                parseCorrectly(argName, argsArray[current]));
-                        current++;
-                    }
-                    state = ParserState.SEARCHING_FOR_ARG;
-                    break;
-            }
+            parseLoop();
         }
 
-        // Special case for trailing boolean args
         if (state == ParserState.PARSING_BOOLEAN_ARG) {
             args.put(argName, true);
         } else if (state == ParserState.PARSING_ARG) {
@@ -107,24 +58,86 @@ public class ArgParser {
         }
     }
 
-    private Object parseCorrectly(String name, String value) {
-        ParseMode parseMode = argNames.get(name);
-        switch (parseMode) {
-            case STRING:
-                return value;
+    private void parseLoop() {
+        switch (state) {
+            case SEARCHING_FOR_ARG:
+                modeSearchingForArg();
+                break;
 
-            case INTEGER:
-                return Integer.parseInt(value);
+            case PARSING_ARG:
+                modeParsingArg();
+                break;
 
-            case BOOLEAN:
-                if (value.isEmpty() || value.equals("0") ||
-                        value.equalsIgnoreCase("false")) {
-                    return false;
-                }
-                return true;
+            case PARSING_BOOLEAN_ARG:
+                modeParsingBooleanArg();
+                break;
+        }
+    }
+
+    private void modeSearchingForArg() {
+        String part = argsArray[current];
+        if (!part.startsWith("-")) {
+            throw new ArgParseException(
+                    "Unexpected word \"" + part + "\"");
         }
 
-        return null;
+        int equalsIndex = part.indexOf('=');
+        String argValue = null;
+        if (equalsIndex == -1) {
+            argName = part.substring(1);
+        } else {
+            argName = part.substring(1, equalsIndex);
+            argValue = part.substring(equalsIndex + 1);
+        }
+
+        if (!argNames.containsKey(argName)) {
+            throw new ArgParseException(
+                    "Unknown argument \"" + argName + "\"");
+        }
+
+        if (argValue != null) {
+            args.put(argName, parseCorrectly(argName, argValue));
+        } else {
+            state = ParserState.PARSING_ARG;
+            if (argNames.get(argName) == ParseMode.BOOLEAN) {
+                state = ParserState.PARSING_BOOLEAN_ARG;
+            }
+        }
+        current++;
+    }
+
+    private void modeParsingArg() {
+        args.put(argName,
+                parseCorrectly(argName, argsArray[current]));
+        current++;
+        state = ParserState.SEARCHING_FOR_ARG;
+    }
+
+    private void modeParsingBooleanArg() {
+        String currentPart = argsArray[current];
+        if (currentPart.startsWith("-")) {
+            args.put(argName, true);
+        } else {
+            args.put(argName,
+                    parseCorrectly(argName, argsArray[current]));
+            current++;
+        }
+        state = ParserState.SEARCHING_FOR_ARG;
+    }
+
+    private Object parseCorrectly(String name, String value) {
+        ParseMode parseMode = argNames.get(name);
+        return switch (parseMode) {
+            case STRING -> value;
+            case INTEGER -> Integer.parseInt(value);
+            case BOOLEAN -> {
+                if (value.isEmpty() || value.equals("0") ||
+                        value.equalsIgnoreCase("false")) {
+                    yield false;
+                }
+                yield true;
+            }
+        };
     }
 
     public void addArg(String name, ParseMode parseMode) {

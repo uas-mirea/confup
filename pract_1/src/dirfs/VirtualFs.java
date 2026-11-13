@@ -170,7 +170,6 @@ public class VirtualFs {
             return new File(child);
         }
 
-        // Deletes a file, link, or empty directory.
         public void delete() throws VfsException {
             if (node == root) {
                 throw new VfsException("Cannot delete the VFS root");
@@ -182,7 +181,6 @@ public class VirtualFs {
             node.parent.children.remove(node.name);
         }
 
-        // Removes a file, link, or an entire directory subtree.
         public void deleteRecursively() throws VfsException {
             if (node == root) {
                 throw new VfsException("Cannot delete the VFS root");
@@ -253,8 +251,6 @@ public class VirtualFs {
         return fsName;
     }
 
-    // Path lookup
-
     public File getFileByAbsolutePath(String path) throws VfsException {
         return new File(resolve(root, path));
     }
@@ -295,8 +291,6 @@ public class VirtualFs {
 
         return current;
     }
-
-    // Creation
 
     public File createFile(
             File relativeFile, String path, byte[] content)
@@ -352,8 +346,6 @@ public class VirtualFs {
 
         return new File(parent).createDirectory(name);
     }
-
-    // Validation
 
     private void validateOwner(File file) throws VfsException {
         if (file == null) {

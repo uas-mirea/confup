@@ -7,6 +7,8 @@ import java.io.PrintStream;
 public final class Cp implements Command {
     public static final String NAME = "cp";
 
+    private static final int REQUIRED_SPAGHETTI = 2;
+
     public String getArgTemplate() {
         return "<from_file> <to_file>";
     }
@@ -14,7 +16,7 @@ public final class Cp implements Command {
     public int run(String[] args, State state) {
         PrintStream stdout = state.getStdout();
 
-        if (args.length < 3) {
+        if (args.length < REQUIRED_SPAGHETTI) {
             stdout.println("Not enough arguments");
             return 1;
         }

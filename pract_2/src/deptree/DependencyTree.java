@@ -29,20 +29,13 @@ public class DependencyTree {
     public static DependencyTree buildFromRoot(
             Package root, int depth, String dotnetVersion,
             FakeNuget fakeNuget) {
-
         DependencyTree tree = new DependencyTree();
         tree.root = new Leaf(root);
-
-        // Stores one Leaf per package ID.
         Map<String, Leaf> discovered = new HashMap<>();
         discovered.put(root.id, tree.root);
-
-        // Tracks packages whose dependencies have already been expanded.
         Set<String> expanded = new HashSet<>();
-
         Queue<QueueEntry> queue = new ArrayDeque<>();
         queue.add(new QueueEntry(tree.root, 0));
-
         while (!queue.isEmpty()) {
             QueueEntry entry = queue.poll();
             Leaf current = entry.leaf();
@@ -52,38 +45,42 @@ public class DependencyTree {
             if (!expanded.add(current.pkg.id)) {
                 continue;
             }
-
             List<Package.Dependency> dependencies =
-                    current.pkg.dependencies.get(dotnetVersion);
-            if (dependencies == null) {
-                dependencies = current.pkg.dependencies.get("any");
-            }
+                    getDependencies(current.pkg, dotnetVersion);
             if (dependencies == null) {
                 continue;
             }
-
             for (Package.Dependency dependency : dependencies) {
                 Leaf child = discovered.get(dependency.id());
                 if (child == null) {
                     Package pkg;
-                    if (fakeNuget == null) {
-                        pkg = NugetClient.downloadByName(dependency.id());
-                    } else {
-                        pkg = fakeNuget.getPackage(dependency.id());
-                    }
-                    child = new Leaf(pkg);
-                    discovered.put(pkg.id, child);
+                    child = new Leaf(downloadPackage(
+                            dependency.id(), fakeNuget));
+                    discovered.put(child.pkg.id, child);
                 }
                 current.dependencies.add(child);
-
                 if (!expanded.contains(child.pkg.id)) {
                     queue.add(new QueueEntry(
                             child, entry.depth() + 1));
                 }
             }
         }
-
         return tree;
+    }
+
+    private static List<Package.Dependency> getDependencies(
+            Package pkg, String dotnetVersion) {
+        List<Package.Dependency> dependencies =
+                pkg.dependencies.get(dotnetVersion);
+        return dependencies != null ?
+                dependencies : pkg.dependencies.get("any");
+    }
+
+    private static Package downloadPackage(
+            String packageId, FakeNuget fakeNuget) {
+        return fakeNuget == null
+                ? NugetClient.downloadByName(packageId)
+                : fakeNuget.getPackage(packageId);
     }
 
     public Leaf getRoot() {
