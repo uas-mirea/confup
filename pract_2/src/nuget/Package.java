@@ -169,7 +169,6 @@ public class Package {
                     break;
 
                 default:
-                    // Ignore all other metadata.
                     break;
             }
         }

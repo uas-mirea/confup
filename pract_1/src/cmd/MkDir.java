@@ -7,6 +7,8 @@ import java.io.PrintStream;
 public final class MkDir implements Command {
     public static final String NAME = "mkdir";
 
+    private static final int REQUIRED_SPAGHETTI = 2;
+
     public String getArgTemplate() {
         return "<directory>";
     }
@@ -14,7 +16,7 @@ public final class MkDir implements Command {
     public int run(String[] args, State state) {
         PrintStream stdout = state.getStdout();
 
-        if (args.length != 2) {
+        if (args.length != REQUIRED_SPAGHETTI) {
             stdout.println("Usage: mkdir <directory>");
             return 1;
         }

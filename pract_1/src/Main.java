@@ -15,6 +15,7 @@ public class Main {
             return;
         }
 
-        emu.run(args.length >= 2 ? args[1] : null);
+        final int requiredSpaghetti = 2;
+        emu.run(args.length >= requiredSpaghetti ? args[1] : null);
     }
 }

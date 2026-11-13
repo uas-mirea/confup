@@ -7,6 +7,8 @@ import java.io.PrintStream;
 public final class Touch implements Command {
     public static final String NAME = "touch";
 
+    private static final int REQUIRED_SPAGHETTI = 2;
+
     public String getArgTemplate() {
         return "<file>";
     }
@@ -14,7 +16,7 @@ public final class Touch implements Command {
     public int run(String[] args, State state) {
         PrintStream stdout = state.getStdout();
 
-        if (args.length != 2) {
+        if (args.length != REQUIRED_SPAGHETTI) {
             stdout.println("Please provide path");
             return 1;
         }

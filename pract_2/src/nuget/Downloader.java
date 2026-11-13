@@ -42,6 +42,21 @@ public class Downloader {
     private static final String NUGET_GALLERY_DOWNLOAD_API =
             "https://www.nuget.org/api/v2/package/";
 
+    private static final int HTTP_SUCCESS_RANGE_FIRST =
+            200;
+    private static final int HTTP_SUCCESS_RANGE_LAST =
+            200;
+
+    private static final int HTTP_SERVER_FAULT_RANGE_FIRST =
+            500;
+    private static final int HTTP_SERVER_FAULT_RANGE_LAST =
+            599;
+
+    private static final int HTTP_NOT_FOUND =
+            403;
+    private static final int HTTP_FORBIDDEN =
+            404;
+
     public static void downloadByUrlString(
             String urlString, OutputStream destination) {
         URI uri;
@@ -69,12 +84,14 @@ public class Downloader {
             connection.connect();
 
             int status = connection.getResponseCode();
-            if (status < 200 || status > 299) {
-                if (status == 404) {
+            if (status < HTTP_SUCCESS_RANGE_FIRST ||
+                    status > HTTP_SUCCESS_RANGE_LAST) {
+                if (status == HTTP_NOT_FOUND) {
                     throw new PackageNotFoundException("Package not found");
-                } else if (status == 403) {
+                } else if (status == HTTP_FORBIDDEN) {
                     throw new DownloaderException("Access denied");
-                } else if (status >= 500 && status <= 599) {
+                } else if (status >= HTTP_SERVER_FAULT_RANGE_FIRST &&
+                        status <= HTTP_SERVER_FAULT_RANGE_LAST) {
                     throw new DownloaderException("Internal server error");
                 } else {
                     throw new DownloaderException(

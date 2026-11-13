@@ -35,9 +35,6 @@ public class ArgParser {
     private final HashMap<String, Object> args = new HashMap<>();
 
     public void parse(String[] argsArray) {
-        // Welcome to the state machine spaghetti zone.
-        // Enjoy your stay 🍝
-
         ParserState state = ParserState.SEARCHING_FOR_ARG;
         int current = 0;
         String argName = null;
@@ -98,7 +95,6 @@ public class ArgParser {
             }
         }
 
-        // Special case for trailing boolean args
         if (state == ParserState.PARSING_BOOLEAN_ARG) {
             args.put(argName, true);
         } else if (state == ParserState.PARSING_ARG) {

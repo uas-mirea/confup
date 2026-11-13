@@ -13,6 +13,9 @@ import dirfs.VirtualFs;
 public class Emulator {
     private final VirtualFs fs;
 
+    private int lastExitCode = 0;
+    State state = null;
+
     Emulator(String vfsPath) throws VirtualFs.VfsException {
         fs = new VirtualFs(vfsPath);
     }
@@ -27,65 +30,57 @@ public class Emulator {
             }
         }
         Scanner sc = new Scanner(stream);
-
-        State state = new State(fs, fs.getRoot(), stream, System.out, sc);
-
-        int lastExitCode = 0;
+        state = new State(fs, fs.getRoot(), stream, System.out, sc);
         for (; ; ) {
             if (stream != System.in &&
                     (!sc.hasNextLine() || lastExitCode != 0)) {
                 if (lastExitCode != 0) {
                     System.out.println("An error occurred, stopping script");
                 }
-
-                // Continue input from stdin
                 stream = System.in;
                 sc.close();
                 sc = new Scanner(System.in);
             }
-
-            System.out.printf("%s ", fs.getFsName());
-            if (lastExitCode != 0) {
-                System.out.printf("%d|", lastExitCode);
-            }
-            System.out.printf("%s$ ", state.getCwd().getPath());
-
+            printGreeting();
             String line = sc.nextLine();
             if (stream != System.in) {
                 System.out.println(line);
             }
-
             String[] parsedArgs = ArgParser.parseArgs(line);
             if (parsedArgs.length == 0) {
                 continue;
             }
-
             if (Objects.equals(parsedArgs[0], "exit")) {
                 break;
             }
-
-            Command cmd = CommandMap.get(parsedArgs[0]);
-            if (cmd == null) {
-                System.out.printf("%s: command not found\n", parsedArgs[0]);
+            if (handleCommand(parsedArgs) == 1) {
                 continue;
             }
-
-            try {
-                lastExitCode = cmd.run(parsedArgs, state);
-            } catch (Exception e) {
-                System.out.println("Unexpected exception");
-                e.printStackTrace();
-                lastExitCode = 255;
-            }
         }
-
         sc.close();
-        try {
-            if (stream != System.in) {
-                stream.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+    }
+
+    private void printGreeting() {
+        System.out.printf("%s ", fs.getFsName());
+        if (lastExitCode != 0) {
+            System.out.printf("%d|", lastExitCode);
         }
+        System.out.printf("%s$ ", state.getCwd().getPath());
+    }
+
+    private int handleCommand(String[] parsedArgs) {
+        Command cmd = CommandMap.get(parsedArgs[0]);
+        if (cmd == null) {
+            System.out.printf("%s: command not found\n", parsedArgs[0]);
+            return 1;
+        }
+        try {
+            lastExitCode = cmd.run(parsedArgs, state);
+        } catch (Exception e) {
+            System.out.println("Unexpected exception");
+            e.printStackTrace();
+            lastExitCode = 255;
+        }
+        return 0;
     }
 }

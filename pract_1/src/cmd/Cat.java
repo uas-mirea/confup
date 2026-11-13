@@ -7,6 +7,8 @@ import java.io.PrintStream;
 public final class Cat implements Command {
     public static final String NAME = "cat";
 
+    private static final int REQUIRED_SPAGHETTI = 2;
+
     public String getArgTemplate() {
         return "<file>";
     }
@@ -14,7 +16,7 @@ public final class Cat implements Command {
     public int run(String[] args, State state) {
         PrintStream stdout = state.getStdout();
 
-        if (args.length != 2) {
+        if (args.length != REQUIRED_SPAGHETTI) {
             return 1;
         }
         try {

@@ -7,6 +7,8 @@ import java.io.PrintStream;
 public final class Ls implements Command {
     public static final String NAME = "ls";
 
+    private static final int REQUIRED_SPAGHETTI = 2;
+
     public String getArgTemplate() {
         return "[directory]";
     }
@@ -15,7 +17,7 @@ public final class Ls implements Command {
         PrintStream stdout = state.getStdout();
 
         VirtualFs.File dir = state.getCwd();
-        if (args.length >= 2) {
+        if (args.length >= REQUIRED_SPAGHETTI) {
             try {
                 dir = state.getFs()
                         .getFileByRelativePath(state.getCwd(), args[1]);

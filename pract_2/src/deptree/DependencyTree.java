@@ -33,11 +33,9 @@ public class DependencyTree {
         DependencyTree tree = new DependencyTree();
         tree.root = new Leaf(root);
 
-        // Stores one Leaf per package ID.
         Map<String, Leaf> discovered = new HashMap<>();
         discovered.put(root.id, tree.root);
 
-        // Tracks packages whose dependencies have already been expanded.
         Set<String> expanded = new HashSet<>();
 
         Queue<QueueEntry> queue = new ArrayDeque<>();
